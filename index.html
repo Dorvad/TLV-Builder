@@ -1,0 +1,1392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<meta name="theme-color" content="#0d1b2a"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<title>TLV Builder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#0d1b2a;
+  --bg2:#111e2e;
+  --surface:#162130;
+  --surface2:#1c2d40;
+  --border:rgba(255,255,255,0.08);
+  --text:#e8e0d0;
+  --text2:#8a9bb0;
+  --gold:#ffd166;
+  --green:#06d6a0;
+  --red:#ef476f;
+  --blue:#118ab2;
+  --orange:#ff6b35;
+  --radius:12px;
+  --hud-h:88px;
+  --drawer-h:240px;
+}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-family:'Syne',sans-serif;color:var(--text);touch-action:none}
+#app{width:100%;height:100%;display:flex;flex-direction:column;position:relative;overflow:hidden}
+
+/* ── HUD ─────────────────────────────────────────────────────── */
+#hud{
+  position:relative;z-index:20;
+  background:linear-gradient(180deg,rgba(13,27,42,0.98) 0%,rgba(13,27,42,0.85) 100%);
+  border-bottom:1px solid var(--border);
+  backdrop-filter:blur(8px);
+  flex-shrink:0;
+  padding:8px 12px 6px;
+}
+.hud-row1{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.district-label{font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--gold);transition:color 0.4s}
+.hud-title{font-size:15px;font-weight:800;letter-spacing:0.04em;color:var(--text)}
+.settings-btn{background:none;border:1px solid var(--border);color:var(--text2);border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;transition:all 0.2s}
+.settings-btn:active{background:var(--surface2)}
+
+.hud-stats{display:flex;align-items:center;gap:0;background:var(--surface);border-radius:10px;overflow:hidden;border:1px solid var(--border)}
+.hud-stat{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:5px 10px;min-width:0;flex:1;border-right:1px solid var(--border);position:relative}
+.hud-stat:last-child{border-right:none}
+.hud-stat.funds-stat{flex:1.5;background:rgba(255,209,102,0.06)}
+.stat-label{font-size:9px;color:var(--text2);letter-spacing:0.06em;text-transform:uppercase;line-height:1;margin-bottom:2px}
+.stat-val{font-family:'Space Mono',monospace;font-size:13px;font-weight:700;color:var(--text);line-height:1;white-space:nowrap}
+.funds-stat .stat-val{font-size:16px;color:var(--gold)}
+.stat-val.pos{color:var(--green)}
+.stat-val.neg{color:var(--red)}
+.stat-val.flash-up{animation:flashUp 0.4s ease-out}
+.stat-val.flash-down{animation:flashDown 0.4s ease-out}
+@keyframes flashUp{0%{color:#fff;transform:scale(1.15)}100%{}}
+@keyframes flashDown{0%{color:var(--red);transform:scale(0.9)}100%{}}
+
+/* ── CANVAS ──────────────────────────────────────────────────── */
+#game-canvas{display:block;width:100%;flex:1;touch-action:none}
+
+/* ── PLACEMENT CONFIRM BAR ───────────────────────────────────── */
+#confirm-bar{
+  position:absolute;bottom:0;left:0;right:0;
+  display:flex;align-items:center;justify-content:center;
+  gap:16px;padding:12px 20px;
+  background:linear-gradient(0deg,rgba(13,27,42,0.97) 0%,rgba(13,27,42,0.0) 100%);
+  z-index:30;pointer-events:none;
+  transform:translateY(100%);transition:transform 0.25s cubic-bezier(0.34,1.56,0.64,1);
+}
+#confirm-bar.visible{transform:translateY(0);pointer-events:all}
+.confirm-hint{font-size:11px;color:var(--text2);text-align:center;flex:1;line-height:1.4}
+.confirm-hint .quality-great{color:var(--green)}
+.confirm-hint .quality-bad{color:var(--red)}
+.confirm-hint .quality-good{color:var(--gold)}
+.action-btn{border:none;border-radius:50%;width:52px;height:52px;font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(0,0,0,0.4);transition:transform 0.15s,box-shadow 0.15s;flex-shrink:0}
+.action-btn:active{transform:scale(0.92)}
+.btn-confirm{background:var(--green)}
+.btn-cancel{background:var(--red)}
+.btn-confirm:disabled{background:#3a5a4a;opacity:0.5;cursor:not-allowed}
+
+/* ── BUILD BUTTON ────────────────────────────────────────────── */
+#build-fab{
+  position:absolute;bottom:18px;left:50%;transform:translateX(-50%);
+  background:var(--orange);color:#fff;border:none;border-radius:28px;
+  padding:12px 28px;font-family:'Syne',sans-serif;font-size:15px;font-weight:700;
+  letter-spacing:0.05em;cursor:pointer;z-index:25;
+  box-shadow:0 6px 24px rgba(255,107,53,0.45);
+  transition:all 0.2s cubic-bezier(0.34,1.56,0.64,1);
+}
+#build-fab:active{transform:translateX(-50%) scale(0.94)}
+#build-fab.hidden{opacity:0;pointer-events:none;transform:translateX(-50%) translateY(20px)}
+
+/* ── BULLDOZE BTN ────────────────────────────────────────────── */
+#bulldoze-btn{
+  position:absolute;bottom:18px;right:16px;
+  background:var(--surface2);border:1px solid var(--border);color:var(--text2);
+  border-radius:50%;width:44px;height:44px;font-size:18px;cursor:pointer;
+  z-index:25;display:flex;align-items:center;justify-content:center;
+  transition:all 0.2s;
+}
+#bulldoze-btn.active{background:var(--red);color:#fff;border-color:var(--red)}
+#bulldoze-btn:active{transform:scale(0.92)}
+
+/* ── BUILD DRAWER ────────────────────────────────────────────── */
+#build-drawer{
+  position:absolute;bottom:0;left:0;right:0;
+  background:var(--bg2);
+  border-top:1px solid var(--border);
+  border-radius:20px 20px 0 0;
+  z-index:30;
+  transform:translateY(100%);
+  transition:transform 0.3s cubic-bezier(0.32,0.72,0,1);
+  max-height:var(--drawer-h);
+}
+#build-drawer.open{transform:translateY(0)}
+.drawer-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:10px auto 8px}
+.drawer-tabs{display:flex;gap:4px;padding:0 12px 8px;overflow-x:auto;scrollbar-width:none}
+.drawer-tabs::-webkit-scrollbar{display:none}
+.tab-btn{flex-shrink:0;background:var(--surface);border:1px solid var(--border);color:var(--text2);border-radius:20px;padding:5px 12px;font-family:'Syne',sans-serif;font-size:11px;font-weight:600;letter-spacing:0.04em;cursor:pointer;transition:all 0.15s;white-space:nowrap}
+.tab-btn.active{background:var(--orange);border-color:var(--orange);color:#fff}
+.drawer-cards{display:flex;gap:10px;padding:4px 12px 16px;overflow-x:auto;scrollbar-width:none}
+.drawer-cards::-webkit-scrollbar{display:none}
+.building-card{
+  flex-shrink:0;width:88px;background:var(--surface);border:1.5px solid var(--border);
+  border-radius:12px;padding:10px 8px;cursor:pointer;transition:all 0.15s;
+  display:flex;flex-direction:column;align-items:center;gap:4px;position:relative;
+}
+.building-card:active{transform:scale(0.95)}
+.building-card.selected{border-color:var(--orange);background:rgba(255,107,53,0.12)}
+.building-card.locked{opacity:0.45;cursor:not-allowed}
+.building-card.cant-afford{opacity:0.6}
+.card-icon{font-size:26px;line-height:1}
+.card-name{font-size:10px;font-weight:700;text-align:center;color:var(--text);line-height:1.2}
+.card-cost{font-family:'Space Mono',monospace;font-size:10px;color:var(--gold);font-weight:700}
+.card-cant-afford .card-cost{color:var(--red)}
+.lock-badge{position:absolute;top:4px;right:4px;font-size:10px}
+.close-drawer-btn{position:absolute;top:10px;right:12px;background:none;border:none;color:var(--text2);font-size:18px;cursor:pointer;line-height:1}
+
+/* ── INSPECTOR PANEL ─────────────────────────────────────────── */
+#inspector{
+  position:absolute;top:calc(var(--hud-h) + 8px);left:8px;right:8px;
+  background:var(--bg2);border:1px solid var(--border);border-radius:16px;
+  padding:14px;z-index:25;
+  transform:translateY(-8px);opacity:0;pointer-events:none;
+  transition:all 0.2s;max-height:45vh;overflow-y:auto;
+}
+#inspector.visible{transform:translateY(0);opacity:1;pointer-events:all}
+.insp-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.insp-title{display:flex;align-items:center;gap:8px}
+.insp-emoji{font-size:24px}
+.insp-name{font-size:16px;font-weight:800}
+.insp-category{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:0.06em}
+.close-insp-btn{background:none;border:none;color:var(--text2);font-size:18px;cursor:pointer}
+.insp-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px}
+.insp-stat{background:var(--surface);border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:2px}
+.insp-stat-label{font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:0.05em}
+.insp-stat-val{font-family:'Space Mono',monospace;font-size:14px;font-weight:700}
+.insp-notes{display:flex;flex-direction:column;gap:4px}
+.insp-note{font-size:11px;padding:5px 8px;border-radius:6px;line-height:1.4}
+.note-pos{background:rgba(6,214,160,0.1);color:var(--green)}
+.note-neg{background:rgba(239,71,111,0.1);color:var(--red)}
+.note-neutral{background:var(--surface);color:var(--text2)}
+.insp-bulldoze-btn{margin-top:10px;width:100%;background:rgba(239,71,111,0.12);border:1px solid var(--red);color:var(--red);border-radius:8px;padding:8px;font-family:'Syne',sans-serif;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.15s}
+.insp-bulldoze-btn:active{background:var(--red);color:#fff}
+
+/* ── ONBOARDING ──────────────────────────────────────────────── */
+#onboarding{
+  position:fixed;inset:0;background:rgba(13,27,42,0.92);z-index:100;
+  display:flex;align-items:flex-end;justify-content:center;
+  padding:24px;backdrop-filter:blur(6px);
+}
+.onboard-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:20px;
+  padding:24px;max-width:360px;width:100%;
+}
+.onboard-logo{font-size:40px;text-align:center;margin-bottom:8px}
+.onboard-title{font-size:26px;font-weight:800;text-align:center;margin-bottom:4px;color:var(--gold)}
+.onboard-sub{font-size:13px;color:var(--text2);text-align:center;margin-bottom:20px}
+.onboard-steps{display:flex;flex-direction:column;gap:10px;margin-bottom:20px}
+.onboard-step{display:flex;align-items:flex-start;gap:10px;font-size:13px;line-height:1.5}
+.step-num{background:var(--orange);color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;margin-top:1px}
+.onboard-start-btn{width:100%;background:var(--orange);color:#fff;border:none;border-radius:12px;padding:14px;font-family:'Syne',sans-serif;font-size:15px;font-weight:700;cursor:pointer;letter-spacing:0.04em;transition:opacity 0.15s}
+.onboard-start-btn:active{opacity:0.85}
+
+/* ── MILESTONE TOAST ─────────────────────────────────────────── */
+.milestone-toast{
+  position:fixed;top:calc(var(--hud-h) + 12px);left:50%;transform:translateX(-50%) translateY(-10px);
+  background:linear-gradient(135deg,#2a1a05,#3a2a10);border:1px solid var(--gold);
+  color:var(--gold);padding:10px 18px;border-radius:30px;font-size:13px;font-weight:700;
+  z-index:200;opacity:0;transition:all 0.3s;white-space:nowrap;
+  box-shadow:0 4px 20px rgba(255,209,102,0.3);
+}
+.milestone-toast.visible{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ── UNLOCK TOAST ────────────────────────────────────────────── */
+.unlock-toast{
+  position:fixed;top:calc(var(--hud-h) + 52px);left:50%;transform:translateX(-50%) translateY(-10px);
+  background:linear-gradient(135deg,#0d1f30,#1a3050);border:1px solid var(--blue);
+  color:#88ccff;padding:8px 16px;border-radius:30px;font-size:12px;font-weight:600;
+  z-index:200;opacity:0;transition:all 0.3s;white-space:nowrap;
+}
+.unlock-toast.visible{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ── SETTINGS MODAL ──────────────────────────────────────────── */
+#settings-modal{
+  position:fixed;inset:0;background:rgba(13,27,42,0.88);z-index:150;
+  display:flex;align-items:center;justify-content:center;padding:20px;
+  opacity:0;pointer-events:none;transition:opacity 0.2s;backdrop-filter:blur(6px);
+}
+#settings-modal.open{opacity:1;pointer-events:all}
+.settings-card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:24px;width:100%;max-width:320px}
+.settings-title{font-size:20px;font-weight:800;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}
+.settings-row{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
+.settings-label{font-size:12px;color:var(--text2);text-transform:uppercase;letter-spacing:0.06em}
+.settings-milestones{display:flex;flex-direction:column;gap:6px;max-height:200px;overflow-y:auto}
+.milestone-item{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2)}
+.milestone-item.done{color:var(--gold)}
+.milestone-item::before{content:'○';flex-shrink:0}
+.milestone-item.done::before{content:'●';color:var(--gold)}
+.settings-reset-btn{width:100%;background:rgba(239,71,111,0.1);border:1px solid rgba(239,71,111,0.4);color:var(--red);border-radius:10px;padding:10px;font-family:'Syne',sans-serif;font-size:13px;font-weight:600;cursor:pointer;margin-top:8px}
+
+/* ── DISTRICT BADGE ──────────────────────────────────────────── */
+#district-badge{
+  position:absolute;top:calc(var(--hud-h) + 8px);right:8px;
+  background:var(--surface);border:1px solid var(--border);border-radius:10px;
+  padding:6px 10px;font-size:11px;font-weight:700;z-index:20;
+  opacity:0;transition:all 0.4s;pointer-events:none;max-width:160px;text-align:center;
+  line-height:1.3;
+}
+#district-badge.visible{opacity:1}
+
+/* ── FLOATING NUMBERS (canvas overlay) ──────────────────────── */
+.float-text{position:absolute;font-family:'Space Mono',monospace;font-size:12px;font-weight:700;pointer-events:none;z-index:15;white-space:nowrap;text-shadow:0 1px 4px rgba(0,0,0,0.8)}
+
+/* ── UTIL ────────────────────────────────────────────────────── */
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- HUD -->
+  <div id="hud">
+    <div class="hud-row1">
+      <span class="district-label" id="district-label">🏗️ Empty Lot</span>
+      <span class="hud-title">TLV Builder</span>
+      <button class="settings-btn" id="settings-btn" aria-label="Settings">⚙️</button>
+    </div>
+    <div class="hud-stats">
+      <div class="hud-stat funds-stat">
+        <span class="stat-label">FUNDS ₪</span>
+        <span class="stat-val" id="stat-funds">800</span>
+      </div>
+      <div class="hud-stat">
+        <span class="stat-label">😊</span>
+        <span class="stat-val" id="stat-hap">60</span>
+      </div>
+      <div class="hud-stat">
+        <span class="stat-label">👥</span>
+        <span class="stat-val" id="stat-pop">0</span>
+      </div>
+      <div class="hud-stat">
+        <span class="stat-label">✈️</span>
+        <span class="stat-val" id="stat-tour">0</span>
+      </div>
+      <div class="hud-stat">
+        <span class="stat-label">NET/s</span>
+        <span class="stat-val pos" id="stat-net">+0</span>
+      </div>
+      <div class="hud-stat">
+        <span class="stat-label">↑/s</span>
+        <span class="stat-val" id="stat-upkeep">0</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Game Canvas -->
+  <canvas id="game-canvas"></canvas>
+
+  <!-- District badge -->
+  <div id="district-badge"></div>
+
+  <!-- Placement confirm bar -->
+  <div id="confirm-bar">
+    <button class="action-btn btn-cancel" id="btn-cancel">✕</button>
+    <div class="confirm-hint" id="placement-hint">Tap a tile to place</div>
+    <button class="action-btn btn-confirm" id="btn-confirm">✓</button>
+  </div>
+
+  <!-- Bulldoze button -->
+  <button id="bulldoze-btn" title="Demolish building">🔨</button>
+
+  <!-- Build FAB -->
+  <button id="build-fab">🏗️ Build</button>
+
+  <!-- Build Drawer -->
+  <div id="build-drawer">
+    <div class="drawer-handle"></div>
+    <button class="close-drawer-btn" id="close-drawer">✕</button>
+    <div class="drawer-tabs" id="drawer-tabs"></div>
+    <div class="drawer-cards" id="drawer-cards"></div>
+  </div>
+
+  <!-- Inspector Panel -->
+  <div id="inspector">
+    <div class="insp-header">
+      <div class="insp-title">
+        <span class="insp-emoji" id="insp-emoji">🏢</span>
+        <div>
+          <div class="insp-name" id="insp-name">Building</div>
+          <div class="insp-category" id="insp-cat">Category</div>
+        </div>
+      </div>
+      <button class="close-insp-btn" id="close-insp">✕</button>
+    </div>
+    <div class="insp-grid" id="insp-grid"></div>
+    <div class="insp-notes" id="insp-notes"></div>
+    <button class="insp-bulldoze-btn" id="insp-bulldoze-btn">🔨 Demolish (refund 40%)</button>
+  </div>
+</div>
+
+<!-- Onboarding -->
+<div id="onboarding">
+  <div class="onboard-card">
+    <div class="onboard-logo">🌆</div>
+    <div class="onboard-title">TLV Builder</div>
+    <div class="onboard-sub">Build your Tel Aviv district.<br/>Cafes, Bauhaus, falafel and ambition.</div>
+    <div class="onboard-steps">
+      <div class="onboard-step"><div class="step-num">1</div><div>Tap <strong>🏗️ Build</strong> and place homes to attract residents</div></div>
+      <div class="onboard-step"><div class="step-num">2</div><div>Add shops near residents — proximity earns more</div></div>
+      <div class="onboard-step"><div class="step-num">3</div><div>Keep happiness high to maximise city performance</div></div>
+      <div class="onboard-step"><div class="step-num">4</div><div>Grow to unlock landmarks like Dizengoff Square</div></div>
+    </div>
+    <button class="onboard-start-btn" id="onboard-start">Let's Build ₪</button>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div id="settings-modal">
+  <div class="settings-card">
+    <div class="settings-title">
+      Settings
+      <button style="background:none;border:none;color:var(--text2);font-size:18px;cursor:pointer" id="close-settings">✕</button>
+    </div>
+    <div class="settings-row">
+      <div class="settings-label">Milestones</div>
+      <div class="settings-milestones" id="settings-milestones"></div>
+    </div>
+    <button class="settings-reset-btn" id="reset-btn">🗑️ Reset City</button>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// TLV BUILDER — GAME ENGINE
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── BUILDING DEFINITIONS ─────────────────────────────────────────────────
+const BUILDINGS = {
+  bauhaus_block: {
+    key:'bauhaus_block', name:'Bauhaus Block', category:'residential', emoji:'🏢',
+    cost:100, upkeep:1, income:0, pop:10, popType:'locals', happiness:0, tourism:0,
+    height:44, colors:{top:'#f0e8d8',left:'#d8ccb8',right:'#c0b098'},
+    desc:'Sturdy Bauhaus housing. The backbone of any district.',
+    synergies:['park','falafel_stand','cafe'], penalties:[], resBonus:0, unlocked:true,
+  },
+  hipster_loft: {
+    key:'hipster_loft', name:'Hipster Loft', category:'residential', emoji:'🏗️',
+    cost:140, upkeep:2, income:0, pop:8, popType:'hipster', happiness:1, tourism:1,
+    height:38, colors:{top:'#b8755a',left:'#964d32',right:'#7a3820'},
+    desc:'Exposed brick and cold brew. Thrives near cafes and culture.',
+    synergies:['cafe','park','museum','dizengoff_square'], penalties:['bank'], resBonus:0, unlocked:true,
+  },
+  luxury_tower: {
+    key:'luxury_tower', name:'Luxury Tower', category:'residential', emoji:'🏙️',
+    cost:300, upkeep:4, income:0, pop:6, popType:'highclass', happiness:2, tourism:2,
+    height:90, colors:{top:'#a8d4e8',left:'#78aec8',right:'#5090a8'},
+    desc:'Premium residences. Sensitive to neighbours.',
+    synergies:['museum','bank','dizengoff_square','park'], penalties:['falafel_stand','dense_housing'],
+    resBonus:0, unlocked:false, unlockCond:'population_30', unlockDesc:'Reach 30 residents',
+  },
+  dense_housing: {
+    key:'dense_housing', name:'Dense Housing', category:'residential', emoji:'🏘️',
+    cost:70, upkeep:1, income:0, pop:14, popType:'dense', happiness:-1, tourism:0,
+    height:32, colors:{top:'#c0a080',left:'#9a7858',right:'#7c6040'},
+    desc:'High density, lower cost. Reduces happiness slightly.',
+    synergies:['falafel_stand','police_station'], penalties:['luxury_tower'],
+    resBonus:0, unlocked:false, unlockCond:'buildings_5', unlockDesc:'Place 5 buildings',
+  },
+  cafe: {
+    key:'cafe', name:'Café', category:'commercial', emoji:'☕',
+    cost:120, upkeep:2, income:8, pop:0, popType:null, happiness:2, tourism:2,
+    height:28, colors:{top:'#f0c060',left:'#d89830',right:'#b87818'},
+    desc:'Double espresso and avocado toast. Strong near hipsters.',
+    synergies:['hipster_loft','park','bauhaus_block'], penalties:[], resBonus:0.4, unlocked:true,
+  },
+  falafel_stand: {
+    key:'falafel_stand', name:'Falafel Stand', category:'commercial', emoji:'🧆',
+    cost:80, upkeep:1, income:5, pop:0, popType:null, happiness:2, tourism:3,
+    height:20, colors:{top:'#e0983a',left:'#c07020',right:'#a05010'},
+    desc:'The lifeblood of TLV. Everyone loves it.',
+    synergies:['bauhaus_block','dense_housing','dizengoff_square'], penalties:['luxury_tower'],
+    resBonus:0.3, unlocked:true,
+  },
+  bank: {
+    key:'bank', name:'Bank', category:'commercial', emoji:'🏦',
+    cost:250, upkeep:4, income:4, pop:0, popType:null, happiness:0, tourism:0,
+    height:56, colors:{top:'#c0c0d0',left:'#9898b0',right:'#787890'},
+    desc:'Multiplies commercial income. Hipsters unimpressed.',
+    synergies:['luxury_tower','cafe'], penalties:['hipster_loft'],
+    resBonus:0.2, unlocked:false, unlockCond:'funds_500', unlockDesc:'Earn ₪500 total',
+  },
+  mall: {
+    key:'mall', name:'Mall', category:'commercial', emoji:'🛍️',
+    cost:350, upkeep:5, income:14, pop:0, popType:null, happiness:1, tourism:5,
+    height:52, colors:{top:'#d8e4f0',left:'#a8b8c8',right:'#8898a8'},
+    desc:'Air conditioning and retail therapy.',
+    synergies:['luxury_tower','bank','dense_housing'], penalties:['hipster_loft'],
+    resBonus:0.5, unlocked:false, unlockCond:'population_50', unlockDesc:'Reach 50 residents',
+  },
+  park: {
+    key:'park', name:'Park', category:'culture', emoji:'🌳',
+    cost:90, upkeep:1, income:0, pop:0, popType:null, happiness:5, tourism:3,
+    height:18, colors:{top:'#50a850',left:'#388838',right:'#206820'},
+    desc:'Green lungs of the city. Makes everything nearby better.',
+    synergies:['bauhaus_block','hipster_loft','cafe','museum'], penalties:[],
+    resBonus:0, unlocked:true,
+  },
+  museum: {
+    key:'museum', name:'Museum', category:'culture', emoji:'🏛️',
+    cost:220, upkeep:3, income:2, pop:0, popType:null, happiness:3, tourism:12,
+    height:52, colors:{top:'#e8d8c0',left:'#c8b098',right:'#a89078'},
+    desc:'Culture drives tourism. Strong near landmarks.',
+    synergies:['dizengoff_square','park','luxury_tower','hipster_loft'], penalties:['dense_housing'],
+    resBonus:0, unlocked:false, unlockCond:'buildings_3', unlockDesc:'Place 3 buildings',
+  },
+  police_station: {
+    key:'police_station', name:'Police', category:'services', emoji:'🚓',
+    cost:180, upkeep:3, income:0, pop:0, popType:null, happiness:2, tourism:0,
+    height:44, colors:{top:'#4888d8',last:'#2860b0',right:'#1848880'},
+    desc:'Reduces penalties in dense areas.',
+    synergies:['dense_housing','bauhaus_block'], penalties:[],
+    resBonus:0, unlocked:false, unlockCond:'buildings_4', unlockDesc:'Place 4 buildings',
+  },
+  dizengoff_square: {
+    key:'dizengoff_square', name:'Dizengoff Sq.', category:'landmarks', emoji:'⭕',
+    cost:220, upkeep:3, income:3, pop:0, popType:null, happiness:4, tourism:14,
+    height:24, colors:{top:'#e8184a',left:'#b80030',right:'#880020'},
+    desc:'The iconic circular plaza. City identity anchor.',
+    synergies:['cafe','museum','park','hipster_loft'], penalties:[],
+    resBonus:0, unlocked:false, unlockCond:'population_50', unlockDesc:'Reach 50 residents',
+  },
+  azrieli_towers: {
+    key:'azrieli_towers', name:'Azrieli Towers', category:'landmarks', emoji:'🔷',
+    cost:600, upkeep:8, income:20, pop:0, popType:null, happiness:3, tourism:20,
+    height:120, colors:{top:'#70b8e0',left:'#4090c0',right:'#2070a0'},
+    desc:'The TLV skyline. Commercial powerhouse.',
+    synergies:['bank','mall','luxury_tower','museum'], penalties:[],
+    resBonus:0, unlocked:false, unlockCond:'funds_2000', unlockDesc:'Accumulate ₪2000',
+  },
+  beach_promenade: {
+    key:'beach_promenade', name:'Beach Promenade', category:'landmarks', emoji:'🏖️',
+    cost:280, upkeep:3, income:4, pop:0, popType:null, happiness:6, tourism:16,
+    height:12, colors:{top:'#f0d050',left:'#d0a828',right:'#b08010'},
+    desc:'Sun, sea, and shakshuka at sunset.',
+    synergies:['cafe','dizengoff_square','hipster_loft','luxury_tower'], penalties:[],
+    resBonus:0, unlocked:false, unlockCond:'tourism_50', unlockDesc:'Reach 50 tourism',
+  },
+};
+
+const CATEGORIES = [
+  {key:'residential',label:'Homes'},
+  {key:'commercial',label:'Commerce'},
+  {key:'culture',label:'Culture'},
+  {key:'services',label:'Services'},
+  {key:'landmarks',label:'Landmarks'},
+];
+
+const POP_RATES = {hipster:1.8, highclass:3.5, locals:1.5, dense:0.8};
+
+const MILESTONES = [
+  {id:'first_building',  label:'First Steps',       desc:'Place your first building',      check:s=>s.buildings.size>=1},
+  {id:'buildings_3',     label:'Urban Planner',      desc:'Place 3 buildings',               check:s=>s.buildings.size>=3},
+  {id:'buildings_4',     label:'City Architect',     desc:'Place 4 buildings',               check:s=>s.buildings.size>=4},
+  {id:'buildings_5',     label:'Master Builder',     desc:'Place 5 buildings',               check:s=>s.buildings.size>=5},
+  {id:'buildings_10',    label:'District Complete',  desc:'Place 10 buildings',              check:s=>s.buildings.size>=10},
+  {id:'population_10',   label:'Growing City',       desc:'Reach 10 residents',              check:s=>s.stats.population>=10},
+  {id:'population_30',   label:'Real Neighbourhood', desc:'Reach 30 residents',              check:s=>s.stats.population>=30},
+  {id:'population_50',   label:'Urban District',     desc:'Reach 50 residents',              check:s=>s.stats.population>=50},
+  {id:'population_100',  label:'Tel Aviv Vibes',     desc:'Reach 100 residents',             check:s=>s.stats.population>=100},
+  {id:'funds_500',       label:'Flush With Cash',    desc:'Earn ₪500 total',                check:s=>s.totalEarned>=500},
+  {id:'funds_2000',      label:'Serious Money',      desc:'Accumulate ₪2000',               check:s=>s.totalEarned>=2000},
+  {id:'happy_city',      label:'Happy City',         desc:'Reach 80 happiness',              check:s=>s.stats.happiness>=80},
+  {id:'tourism_50',      label:'Tourist Magnet',     desc:'Reach 50 total tourism',          check:s=>s.stats.tourism>=50},
+  {id:'hipster_district',label:'Hipster District',   desc:'Have 20+ hipster residents',      check:s=>s.stats.hipsters>=20},
+  {id:'luxury_district', label:'Luxury Zone',        desc:'Have 15+ high-class residents',   check:s=>s.stats.highclass>=15},
+];
+
+// ── GAME STATE ────────────────────────────────────────────────────────────
+function createState() {
+  return {
+    funds: 800,
+    totalEarned: 800,
+    secondsPlayed: 0,
+    buildings: new Map(),  // "col_row" → {key,col,row,popAnim}
+    stats: {population:0,hipsters:0,highclass:0,locals:0,dense:0,
+            happiness:60,upkeep:0,residentialIncome:0,commercialIncome:0,
+            tourismIncome:0,totalIncome:0,netIncome:0,tourism:0},
+    unlocked: new Set(['bauhaus_block','hipster_loft','cafe','falafel_stand','park']),
+    completed: new Set(),
+    districtLabel:'🏗️ Empty Lot',
+    districtColor:'#888',
+    COLS: 14,
+    ROWS: 14,
+  };
+}
+
+let STATE = createState();
+
+// ── ISOMETRIC MATH ────────────────────────────────────────────────────────
+const TW = 64, TH = 32;
+
+function gridToScreen(col, row, cam, cw, ch) {
+  const ox = cw/2 + cam.x, oy = TH*2 + cam.y;
+  return {x:(col-row)*(TW/2)+ox, y:(col+row)*(TH/2)+oy};
+}
+function screenToGrid(sx, sy, cam, cw, ch) {
+  const ox = cw/2+cam.x, oy = TH*2+cam.y;
+  const rx = sx-ox, ry = sy-oy;
+  return {
+    col: Math.round((rx/(TW/2)+ry/(TH/2))/2),
+    row: Math.round((ry/(TH/2)-rx/(TW/2))/2),
+  };
+}
+
+// ── ADJACENCY ─────────────────────────────────────────────────────────────
+function getNearby(col, row, radius) {
+  const res = [];
+  for (const [,b] of STATE.buildings) {
+    const d = Math.abs(b.col-col)+Math.abs(b.row-row);
+    if (d>0 && d<=radius) res.push(b);
+  }
+  return res;
+}
+
+function calcAdjacency(col, row) {
+  const b = STATE.buildings.get(`${col}_${row}`);
+  if (!b) return {mult:1, hapBonus:0, tourBonus:0, notes:[]};
+  const def = BUILDINGS[b.key];
+  const nearby = getNearby(col, row, 2);
+  let mult=1, hapBonus=0, tourBonus=0, syns=0, pens=0, resCount=0;
+  const synNames=[], penNames=[];
+  for (const nb of nearby) {
+    const nd = BUILDINGS[nb.key];
+    if (!nd) continue;
+    if (def.synergies.includes(nb.key)) {syns++; synNames.push(nd.name);}
+    if (def.penalties.includes(nb.key)) {pens++; penNames.push(nd.name);}
+    if (nd.pop>0 && def.resBonus>0) resCount++;
+  }
+  const notes=[];
+  if (syns>0) {
+    const b2=Math.min(syns*0.15,0.6); mult+=b2;
+    notes.push({text:`+${Math.round(b2*100)}% from ${synNames.slice(0,2).join(', ')}`,type:'pos'});
+    hapBonus+=syns*0.3;
+  }
+  if (resCount>0 && def.resBonus>0) {
+    const b2=Math.min(resCount*def.resBonus,0.8); mult+=b2;
+    notes.push({text:`+${Math.round(b2*100)}% from nearby residents`,type:'pos'});
+  }
+  if (pens>0) {
+    const p=Math.min(pens*0.2,0.5); mult-=p; hapBonus-=pens*0.5;
+    notes.push({text:`-${Math.round(p*100)}% from ${penNames.slice(0,2).join(', ')}`,type:'neg'});
+  }
+  // Park → residential happiness bonus
+  const parks = nearby.filter(n=>n.key==='park');
+  if (parks.length>0 && def.pop>0) {
+    hapBonus+=parks.length*1.5; tourBonus+=parks.length;
+    notes.push({text:`+${(parks.length*1.5).toFixed(1)} happiness from parks`,type:'pos'});
+  }
+  // Museum + landmark
+  if (b.key==='museum') {
+    const lm=nearby.filter(n=>['dizengoff_square','azrieli_towers','beach_promenade'].includes(n.key));
+    if (lm.length>0) {tourBonus+=lm.length*4; notes.push({text:`+${lm.length*4} tourism from landmarks`,type:'pos'});}
+  }
+  // Bank commercial boost
+  const banks=nearby.filter(n=>n.key==='bank');
+  if (banks.length>0 && def.income>0) {
+    mult+=banks.length*0.25;
+    notes.push({text:`+${banks.length*25}% income from bank`,type:'pos'});
+  }
+  // Police + dense
+  if (b.key==='dense_housing' && nearby.some(n=>n.key==='police_station')) {
+    hapBonus+=2; notes.push({text:'+2 happiness from police',type:'pos'});
+  }
+  // Luxury unhappy check
+  if (b.key==='luxury_tower' && pens>0) {
+    hapBonus-=2; notes.push({text:'Luxury residents unhappy with surroundings',type:'neg'});
+  }
+  mult=Math.max(0.1,mult);
+  return {mult, hapBonus, tourBonus, notes};
+}
+
+// ── SIMULATION TICK ───────────────────────────────────────────────────────
+function simulateTick() {
+  let population=0,hipsters=0,highclass=0,locals=0,dense=0;
+  let upkeep=0,residentialIncome=0,commercialIncome=0,tourismRaw=0;
+  let hapMods=0;
+
+  for (const [,b] of STATE.buildings) {
+    const def=BUILDINGS[b.key];
+    if (!def) continue;
+    const adj=calcAdjacency(b.col,b.row);
+    upkeep+=def.upkeep;
+    if (def.popType && def.pop>0) {
+      population+=def.pop;
+      if (def.popType==='hipster') hipsters+=def.pop;
+      else if (def.popType==='highclass') highclass+=def.pop;
+      else if (def.popType==='locals') locals+=def.pop;
+      else if (def.popType==='dense') dense+=def.pop;
+      residentialIncome+=def.pop*(POP_RATES[def.popType]||1);
+    }
+    if (def.income>0) commercialIncome+=def.income*adj.mult;
+    tourismRaw+=def.tourism+adj.tourBonus;
+    hapMods+=def.happiness+adj.hapBonus;
+  }
+
+  let happiness=60+hapMods;
+  if (dense>20) happiness-=Math.floor((dense-20)/10)*2;
+  if (STATE.funds<0) happiness-=5;
+  happiness=Math.max(0,Math.min(100,happiness));
+
+  const happFactor=happiness/100;
+  const tourismIncome=tourismRaw*0.5*(0.5+happFactor*0.5);
+  const totalIncome=residentialIncome+commercialIncome+tourismIncome;
+  const netIncome=totalIncome-upkeep;
+
+  STATE.stats={population,hipsters,highclass,locals,dense,happiness,upkeep,
+    residentialIncome,commercialIncome,tourismIncome,totalIncome,netIncome,tourism:tourismRaw};
+
+  STATE.funds+=netIncome;
+  STATE.secondsPlayed+=1;
+  if (netIncome>0) STATE.totalEarned+=netIncome;
+
+  return netIncome;
+}
+
+// ── DISTRICT IDENTITY ─────────────────────────────────────────────────────
+function computeDistrict() {
+  const s=STATE, st=s.stats, n=s.buildings.size;
+  if (n===0) return {label:'🏗️ Empty Lot',sub:'Place your first building',color:'#888'};
+  let hasLux=false,hasFal=false,hasCafe=false,hasDiz=false,hasMuseum=false,parkCount=0,hasAzr=false;
+  for (const [,b] of s.buildings) {
+    if (b.key==='luxury_tower') hasLux=true;
+    if (b.key==='falafel_stand') hasFal=true;
+    if (b.key==='cafe') hasCafe=true;
+    if (b.key==='dizengoff_square') hasDiz=true;
+    if (b.key==='museum') hasMuseum=true;
+    if (b.key==='park') parkCount++;
+    if (b.key==='azrieli_towers') hasAzr=true;
+  }
+  if (hasAzr) return {label:'🔷 Global City',sub:'Azrieli anchors the skyline',color:'#78c1e8'};
+  if (hasDiz&&hasMuseum&&st.hipsters>=10) return {label:'🎨 Cultural Capital',sub:'Art, culture and coffee',color:'#e91e63'};
+  if (hasDiz) return {label:'⭕ Dizengoff District',sub:'The iconic TLV square',color:'#e91e63'};
+  if (hasLux&&st.highclass>=12) return {label:'💎 Luxury Zone',sub:'Premium addresses',color:'#a8d8ea'};
+  if (st.hipsters>=20&&hasCafe) return {label:'☕ Hipster District',sub:'Cold brew and co-working',color:'#c8855a'};
+  if (st.hipsters>=10&&hasCafe) return {label:'🎸 Creative Quarter',sub:'Emerging creative scene',color:'#c8855a'};
+  if (st.tourism>=30&&hasMuseum) return {label:'🏛️ Tourism Hub',sub:'Visitors keep the city alive',color:'#f0e6d3'};
+  if (st.tourism>=20&&hasFal) return {label:'🧆 Street Food Paradise',sub:'Falafel brings everyone together',color:'#e8a040'};
+  if (parkCount>=2&&st.happiness>=75) return {label:'🌳 Green District',sub:'Parks keep everyone happy',color:'#5cb85c'};
+  if (st.dense>=20&&st.population>=40) return {label:'🏘️ Dense Urban Core',sub:'High density, high energy',color:'#c0a080'};
+  if (st.happiness>=80) return {label:'😊 Happy City',sub:'Your residents love it here',color:'#ffd700'};
+  if (n>=5) return {label:'🏙️ Growing Neighbourhood',sub:'A real city is taking shape',color:'#ff6b35'};
+  if (n>=2) return {label:'🏠 Residential Area',sub:'Add shops and parks to grow',color:'#f5f0e8'};
+  return {label:'🏗️ Under Construction',sub:'Keep building',color:'#888'};
+}
+
+// ── PROGRESSION ───────────────────────────────────────────────────────────
+function checkProgression() {
+  const newMilestones=[];
+  for (const m of MILESTONES) {
+    if (STATE.completed.has(m.id)) continue;
+    if (m.check(STATE)) {
+      STATE.completed.add(m.id);
+      newMilestones.push(m);
+    }
+  }
+  // Update unlocks
+  for (const [key,def] of Object.entries(BUILDINGS)) {
+    if (STATE.unlocked.has(key)) continue;
+    if (!def.unlockCond) {STATE.unlocked.add(key); continue;}
+    if (STATE.completed.has(def.unlockCond)) STATE.unlocked.add(key);
+  }
+  return newMilestones;
+}
+
+// ── PLACEMENT HINT ────────────────────────────────────────────────────────
+function getPlacementHint(col, row, key) {
+  const def=BUILDINGS[key];
+  if (!def) return {valid:false,hint:'Unknown building',quality:'bad'};
+  if (col<0||col>=STATE.COLS||row<0||row>=STATE.ROWS) return {valid:false,hint:'Out of bounds',quality:'bad'};
+  if (STATE.buildings.has(`${col}_${row}`)) return {valid:false,hint:'Tile occupied',quality:'bad'};
+  if (STATE.funds<def.cost) return {valid:false,hint:`Need ₪${def.cost} (have ₪${Math.floor(STATE.funds)})`,quality:'bad'};
+  const nearby=getNearby(col,row,2);
+  let syns=0,pens=0,res=0;
+  for (const nb of nearby) {
+    if (def.synergies.includes(nb.key)) syns++;
+    if (def.penalties.includes(nb.key)) pens++;
+    if (BUILDINGS[nb.key]?.pop>0) res++;
+  }
+  if (!STATE.unlocked.has(key)) return {valid:false,hint:BUILDINGS[key]?.unlockDesc||'Locked',quality:'bad'};
+  if (pens>0&&syns===0) return {valid:true,hint:'Low efficiency — poor surroundings',quality:'bad'};
+  if (syns>=2) return {valid:true,hint:'Great location — strong synergies ✨',quality:'great'};
+  if (syns===1||(def.resBonus>0&&res>0)) return {valid:true,hint:'Good spot — nearby synergy',quality:'good'};
+  if (nearby.length===0) return {valid:true,hint:'Isolated — better near other buildings',quality:'ok'};
+  return {valid:true,hint:'Decent location',quality:'ok'};
+}
+
+// ── RENDERER ──────────────────────────────────────────────────────────────
+const canvas = document.getElementById('game-canvas');
+const ctx = canvas.getContext('2d');
+
+let CAM = {x:0, y:0};
+let HOVER = null;
+let SELECTED_CELL = null;
+let PLACEMENT = {active:false, key:null, valid:false, hint:''};
+let BULLDOZE_MODE = false;
+let FLOAT_TEXTS = [];
+let frameTime = 0;
+
+function resizeCanvas() {
+  const hudH = document.getElementById('hud').getBoundingClientRect().height;
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight - hudH;
+}
+
+function renderTileShape(cx,cy,fill,stroke,alpha=1) {
+  const hw=TW/2, hh=TH/2;
+  ctx.beginPath();
+  ctx.moveTo(cx,    cy-hh);
+  ctx.lineTo(cx+hw, cy);
+  ctx.lineTo(cx,    cy+hh);
+  ctx.lineTo(cx-hw, cy);
+  ctx.closePath();
+  ctx.fillStyle=fill;
+  ctx.globalAlpha=alpha;
+  ctx.fill();
+  if (stroke) {ctx.strokeStyle=stroke;ctx.lineWidth=0.5;ctx.stroke();}
+  ctx.globalAlpha=1;
+}
+
+function drawIsoBox(cx,cy,bh,colors,popAnim=1,selected=false) {
+  const hw=TW/2, hh=TH/2;
+  const actualBH=bh*popAnim;
+  ctx.save();
+  // Right face
+  ctx.beginPath();
+  ctx.moveTo(cx,cy-actualBH+hh); ctx.lineTo(cx+hw,cy-actualBH);
+  ctx.lineTo(cx+hw,cy);          ctx.lineTo(cx,cy+hh);
+  ctx.closePath(); ctx.fillStyle=colors.right; ctx.fill();
+  // Left face
+  ctx.beginPath();
+  ctx.moveTo(cx-hw,cy-actualBH); ctx.lineTo(cx,cy-actualBH+hh);
+  ctx.lineTo(cx,cy+hh);          ctx.lineTo(cx-hw,cy);
+  ctx.closePath(); ctx.fillStyle=colors.left; ctx.fill();
+  // Top face
+  ctx.beginPath();
+  ctx.moveTo(cx,cy-actualBH-hh); ctx.lineTo(cx+hw,cy-actualBH);
+  ctx.lineTo(cx,cy-actualBH+hh); ctx.lineTo(cx-hw,cy-actualBH);
+  ctx.closePath(); ctx.fillStyle=colors.top; ctx.fill();
+  // Outline for selected
+  if (selected) {
+    ctx.strokeStyle='#ffd166'; ctx.lineWidth=2;
+    ctx.shadowColor='#ffd166'; ctx.shadowBlur=8;
+    ctx.beginPath();
+    ctx.moveTo(cx,cy-actualBH-hh); ctx.lineTo(cx+hw,cy-actualBH);
+    ctx.lineTo(cx,cy-actualBH+hh); ctx.lineTo(cx-hw,cy-actualBH);
+    ctx.closePath(); ctx.stroke(); ctx.shadowBlur=0;
+  }
+  ctx.restore();
+}
+
+function drawBuildingDetails(cx,cy,bh,key,popAnim) {
+  const hw=TW/2, hh=TH/2;
+  const actualBH=bh*popAnim;
+  const topCY=cy-actualBH;
+  if (popAnim<0.7) return;
+  ctx.save();
+  switch(key) {
+    case 'luxury_tower':
+      for (let wy=0;wy<3;wy++) for (let wx=0;wx<2;wx++) {
+        ctx.fillStyle='rgba(200,240,255,0.7)';
+        ctx.fillRect(cx+(wx+0.5)*(hw/2.5)-2.5, topCY+(wy+0.5)*(actualBH/3.5)+hh*0.3-2.5, 4, 4);
+      }
+      ctx.strokeStyle='#4a7a95';ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.moveTo(cx,topCY-hh);ctx.lineTo(cx,topCY-hh-12);ctx.stroke();
+      break;
+    case 'park': {
+      const tx=cx, ty=topCY-hh*0.4;
+      ctx.fillStyle='#5c3a1e'; ctx.fillRect(tx-2,ty-8,4,10);
+      ctx.fillStyle='#1a6a1a'; ctx.beginPath(); ctx.ellipse(tx,ty-14,14,10,0,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='#3a9a3a'; ctx.beginPath(); ctx.ellipse(tx,ty-18,9,7,0,0,Math.PI*2); ctx.fill();
+      break;
+    }
+    case 'dizengoff_square':
+      ctx.strokeStyle='#ff6b9d'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.ellipse(cx,topCY,hw*0.5,hh*0.4,0,0,Math.PI*2); ctx.stroke();
+      ctx.fillStyle='#6ec6f5';
+      ctx.beginPath(); ctx.ellipse(cx,topCY+2,hw*0.2,hh*0.16,0,0,Math.PI*2); ctx.fill();
+      break;
+    case 'cafe':
+      ctx.fillStyle='#c0392b'; ctx.fillRect(cx-hw*0.4,topCY+hh*0.2,hw*0.4,5);
+      ctx.fillStyle='#ffd700'; ctx.font='7px serif'; ctx.textAlign='center';
+      ctx.fillText('☕',cx-hw*0.22,topCY+hh*0.45);
+      break;
+    case 'museum':
+      ctx.fillStyle='#ddc8a0';
+      for (let i=0;i<3;i++) ctx.fillRect(cx-hw*0.3+i*(hw*0.3)-2,topCY+hh*0.1,4,actualBH*0.5);
+      break;
+    case 'bank':
+      ctx.fillStyle='#a8a8c0';
+      for (let i=0;i<2;i++) ctx.fillRect(cx-hw*0.4+i*(hw*0.38),topCY+hh*0.2,3,actualBH*0.6);
+      break;
+    case 'falafel_stand':
+      ctx.fillStyle='#e74c3c';
+      ctx.beginPath(); ctx.moveTo(cx,topCY-hh*0.7); ctx.lineTo(cx-hw*0.5,topCY+hh*0.1); ctx.lineTo(cx+hw*0.5,topCY+hh*0.1); ctx.closePath(); ctx.fill();
+      break;
+    case 'police_station':
+      ctx.fillStyle='#ff2222'; ctx.beginPath(); ctx.arc(cx,topCY-hh-4,4,0,Math.PI*2); ctx.fill();
+      break;
+    case 'azrieli_towers':
+      for (let wy=0;wy<5;wy++) for (let wx=0;wx<3;wx++) {
+        ctx.fillStyle='rgba(180,220,255,0.6)';
+        ctx.fillRect(cx+(wx+0.5)*(hw/3.5)-2, topCY+(wy+0.5)*(actualBH/5.5)+hh*0.15-2, 4, 4);
+      }
+      break;
+    case 'beach_promenade':
+      ctx.strokeStyle='rgba(240,210,80,0.9)'; ctx.lineWidth=2;
+      ctx.beginPath();
+      for (let wx=-hw*0.4;wx<=hw*0.4;wx+=7) {
+        ctx.moveTo(cx+wx,topCY-2); ctx.quadraticCurveTo(cx+wx+3.5,topCY-7,cx+wx+7,topCY-2);
+      }
+      ctx.stroke();
+      break;
+  }
+  ctx.restore();
+}
+
+function renderFrame(ts) {
+  frameTime=ts;
+  const cw=canvas.width, ch=canvas.height;
+  ctx.fillStyle='#0d1b2a';
+  ctx.fillRect(0,0,cw,ch);
+
+  // Draw grid in painter's order
+  for (let sum=0; sum<=(STATE.COLS-1)+(STATE.ROWS-1); sum++) {
+    for (let col=0; col<=sum; col++) {
+      const row=sum-col;
+      if (col>=STATE.COLS||row<0||row>=STATE.ROWS) continue;
+      const {x:cx,y:cy}=gridToScreen(col,row,CAM,cw,ch);
+      if (cx<-TW||cx>cw+TW||cy<-TH*6||cy>ch+TH*4) continue;
+
+      // Ground tile
+      const g=ctx.createLinearGradient(cx-TW/2,cy-TH/2,cx+TW/2,cy+TH/2);
+      g.addColorStop(0,'#e4d098'); g.addColorStop(1,'#ceba7a');
+      renderTileShape(cx,cy,g,'rgba(0,0,0,0.12)');
+
+      // Highlights
+      const isHover=HOVER&&HOVER.col===col&&HOVER.row===row;
+      const isSel=SELECTED_CELL&&SELECTED_CELL.col===col&&SELECTED_CELL.row===row;
+      const occupied=STATE.buildings.has(`${col}_${row}`);
+
+      if (isSel&&occupied) {
+        renderTileShape(cx,cy,'#ffd166',null,0.3);
+      } else if (isHover&&PLACEMENT.active&&PLACEMENT.key) {
+        renderTileShape(cx,cy,PLACEMENT.valid?'#06d6a0':'#ef476f',null,0.45);
+      } else if (isHover&&BULLDOZE_MODE&&occupied) {
+        renderTileShape(cx,cy,'#ef476f',null,0.5);
+      } else if (isHover&&!PLACEMENT.active&&!BULLDOZE_MODE) {
+        renderTileShape(cx,cy,'#ffffff',null,0.08);
+      }
+    }
+  }
+
+  // Draw buildings
+  for (let sum=0; sum<=(STATE.COLS-1)+(STATE.ROWS-1); sum++) {
+    for (let col=0; col<=sum; col++) {
+      const row=sum-col;
+      if (col>=STATE.COLS||row<0||row>=STATE.ROWS) continue;
+      const {x:cx,y:cy}=gridToScreen(col,row,CAM,cw,ch);
+      if (cx<-TW||cx>cw+TW||cy<-TH*10||cy>ch+TH*4) continue;
+
+      const b=STATE.buildings.get(`${col}_${row}`);
+      if (b) {
+        const def=BUILDINGS[b.key];
+        if (!def) continue;
+        if (b.popAnim<1) b.popAnim=Math.min(1,b.popAnim+0.07);
+        const isSel=SELECTED_CELL&&SELECTED_CELL.col===col&&SELECTED_CELL.row===row;
+        const isBdHover=BULLDOZE_MODE&&HOVER&&HOVER.col===col&&HOVER.row===row;
+        const bob=isSel?Math.sin(ts/400)*2:0;
+        ctx.save();
+        if (isBdHover) ctx.globalAlpha=0.5;
+        drawIsoBox(cx,cy-bob,def.height,def.colors,b.popAnim,isSel);
+        drawBuildingDetails(cx,cy-bob,def.height,b.key,b.popAnim);
+        ctx.restore();
+      } else if (PLACEMENT.active&&PLACEMENT.key&&HOVER&&HOVER.col===col&&HOVER.row===row&&!occupied) {
+        const def=BUILDINGS[PLACEMENT.key];
+        if (def) {ctx.globalAlpha=0.5; drawIsoBox(cx,cy,def.height,def.colors,1,false); ctx.globalAlpha=1;}
+      }
+    }
+  }
+
+  // Floating texts
+  FLOAT_TEXTS=FLOAT_TEXTS.filter(ft=>{
+    ft.age++;
+    const {x:cx,y:cy}=gridToScreen(ft.col,ft.row,CAM,cw,ch);
+    const prog=ft.age/ft.life;
+    ctx.globalAlpha=1-prog;
+    ctx.fillStyle=ft.color;
+    ctx.font='bold 13px "Space Mono",monospace';
+    ctx.textAlign='center';
+    ctx.fillText(ft.text,cx,cy-30-prog*30);
+    ctx.globalAlpha=1;
+    return ft.age<ft.life;
+  });
+
+  requestAnimationFrame(renderFrame);
+}
+
+function addFloat(text,col,row,color='#ffd166') {
+  FLOAT_TEXTS.push({text,col,row,color,age:0,life:80});
+}
+
+// ── HUD UPDATE ────────────────────────────────────────────────────────────
+let prevFunds=800;
+function updateHUD() {
+  const st=STATE.stats;
+  const f=Math.floor(STATE.funds);
+  const fundsEl=document.getElementById('stat-funds');
+  if (f!==prevFunds) {
+    fundsEl.textContent=f.toLocaleString();
+    fundsEl.className='stat-val '+(f>prevFunds?'flash-up':'flash-down');
+    setTimeout(()=>fundsEl.className='stat-val',500);
+    prevFunds=f;
+  }
+
+  const hapEl=document.getElementById('stat-hap');
+  const hap=Math.round(st.happiness);
+  hapEl.textContent=hap;
+  hapEl.className='stat-val'+(hap>=75?' pos':hap<40?' neg':'');
+
+  document.getElementById('stat-pop').textContent=st.population;
+  document.getElementById('stat-tour').textContent=Math.round(st.tourism);
+
+  const net=st.netIncome;
+  const netEl=document.getElementById('stat-net');
+  netEl.textContent=(net>=0?'+':'')+net.toFixed(1);
+  netEl.className='stat-val '+(net>=0?'pos':'neg');
+  document.getElementById('stat-upkeep').textContent=st.upkeep.toFixed(1);
+
+  const district=computeDistrict();
+  STATE.districtLabel=district.label;
+  STATE.districtColor=district.color;
+  const dlEl=document.getElementById('district-label');
+  dlEl.textContent=district.label;
+  dlEl.style.color=district.color;
+
+  const badge=document.getElementById('district-badge');
+  badge.textContent=district.sub;
+  badge.style.color=district.color;
+  badge.classList.toggle('visible',STATE.buildings.size>0);
+}
+
+// ── INSPECTOR ─────────────────────────────────────────────────────────────
+function showInspector(col,row) {
+  const b=STATE.buildings.get(`${col}_${row}`);
+  if (!b) {hideInspector(); return;}
+  const def=BUILDINGS[b.key];
+  if (!def) return;
+  const adj=calcAdjacency(col,row);
+
+  document.getElementById('insp-emoji').textContent=def.emoji;
+  document.getElementById('insp-name').textContent=def.name;
+  document.getElementById('insp-cat').textContent=def.category.toUpperCase();
+
+  const gridEl=document.getElementById('insp-grid');
+  const eff_income=def.income>0?`₪${(def.income*adj.mult).toFixed(1)}/s`:'—';
+  const pop_str=def.pop>0?`+${def.pop} ${def.popType}`:'—';
+  gridEl.innerHTML=`
+    <div class="insp-stat"><div class="insp-stat-label">Income</div><div class="insp-stat-val">${eff_income}</div></div>
+    <div class="insp-stat"><div class="insp-stat-label">Upkeep</div><div class="insp-stat-val">₪${def.upkeep}/s</div></div>
+    <div class="insp-stat"><div class="insp-stat-label">Population</div><div class="insp-stat-val">${pop_str}</div></div>
+    <div class="insp-stat"><div class="insp-stat-label">Tourism</div><div class="insp-stat-val">${def.tourism>0?'+'+def.tourism:'—'}</div></div>
+    <div class="insp-stat"><div class="insp-stat-label">Happiness</div><div class="insp-stat-val">${def.happiness>=0?'+':''+(def.happiness||'—')}</div></div>
+    <div class="insp-stat"><div class="insp-stat-label">Cost</div><div class="insp-stat-val">₪${def.cost}</div></div>
+  `;
+
+  const notesEl=document.getElementById('insp-notes');
+  if (adj.notes.length>0) {
+    notesEl.innerHTML=adj.notes.map(n=>`<div class="insp-note note-${n.type}">${n.text}</div>`).join('');
+  } else {
+    notesEl.innerHTML=`<div class="insp-note note-neutral">${def.desc}</div>`;
+  }
+
+  document.getElementById('inspector').classList.add('visible');
+}
+function hideInspector() {
+  document.getElementById('inspector').classList.remove('visible');
+  SELECTED_CELL=null;
+}
+
+// ── BUILD DRAWER ──────────────────────────────────────────────────────────
+let activeCategory='residential';
+let drawerOpen=false;
+
+function openDrawer() {
+  drawerOpen=true;
+  document.getElementById('build-drawer').classList.add('open');
+  document.getElementById('build-fab').classList.add('hidden');
+  document.getElementById('bulldoze-btn').classList.add('hidden');
+  hideInspector();
+  cancelPlacement();
+  renderDrawer();
+}
+function closeDrawer() {
+  drawerOpen=false;
+  document.getElementById('build-drawer').classList.remove('open');
+  document.getElementById('build-fab').classList.remove('hidden');
+  document.getElementById('bulldoze-btn').classList.remove('hidden');
+}
+
+function renderDrawer() {
+  // Tabs
+  const tabsEl=document.getElementById('drawer-tabs');
+  tabsEl.innerHTML=CATEGORIES.map(c=>`
+    <button class="tab-btn${c.key===activeCategory?' active':''}" data-cat="${c.key}">${c.label}</button>
+  `).join('');
+  tabsEl.querySelectorAll('.tab-btn').forEach(btn=>{
+    btn.addEventListener('click',()=>{activeCategory=btn.dataset.cat; renderDrawer();});
+  });
+
+  // Cards
+  const cardsEl=document.getElementById('drawer-cards');
+  const defs=Object.values(BUILDINGS).filter(d=>d.category===activeCategory);
+  cardsEl.innerHTML=defs.map(d=>{
+    const locked=!STATE.unlocked.has(d.key);
+    const cantAfford=!locked&&STATE.funds<d.cost;
+    const isSel=PLACEMENT.active&&PLACEMENT.key===d.key;
+    return `
+      <div class="building-card${locked?' locked':''}${cantAfford?' cant-afford':''}${isSel?' selected':''}" data-key="${d.key}">
+        ${locked?`<span class="lock-badge">🔒</span>`:''}
+        <div class="card-icon">${d.emoji}</div>
+        <div class="card-name">${d.name}</div>
+        <div class="card-cost${cantAfford?' card-cant-afford':''}">₪${d.cost}</div>
+        ${locked?`<div style="font-size:9px;color:var(--text2);text-align:center;line-height:1.3;margin-top:2px">${d.unlockDesc||'Locked'}</div>`:''}
+      </div>
+    `;
+  }).join('');
+  cardsEl.querySelectorAll('.building-card').forEach(card=>{
+    card.addEventListener('click',()=>{
+      const key=card.dataset.key;
+      const def=BUILDINGS[key];
+      if (!def||!STATE.unlocked.has(key)) return;
+      if (STATE.funds<def.cost) {showToast(`Need ₪${def.cost} to place`,'neg'); return;}
+      startPlacement(key);
+      closeDrawer();
+    });
+  });
+}
+
+// ── PLACEMENT ─────────────────────────────────────────────────────────────
+function startPlacement(key) {
+  PLACEMENT={active:true,key,valid:false,hint:''};
+  BULLDOZE_MODE=false;
+  document.getElementById('bulldoze-btn').classList.remove('active');
+  HOVER=null;
+  SELECTED_CELL=null;
+  hideInspector();
+  document.getElementById('confirm-bar').classList.add('visible');
+  document.getElementById('build-fab').classList.add('hidden');
+  document.getElementById('bulldoze-btn').classList.add('hidden');
+  updateConfirmBar();
+}
+function cancelPlacement() {
+  PLACEMENT={active:false,key:null,valid:false,hint:''};
+  document.getElementById('confirm-bar').classList.remove('visible');
+  document.getElementById('build-fab').classList.remove('hidden');
+  document.getElementById('bulldoze-btn').classList.remove('hidden');
+}
+function confirmPlacement() {
+  if (!PLACEMENT.active||!PLACEMENT.key||!HOVER) return;
+  if (!PLACEMENT.valid) return;
+  const {col,row}=HOVER;
+  const def=BUILDINGS[PLACEMENT.key];
+  if (!def||STATE.funds<def.cost) return;
+  if (STATE.buildings.has(`${col}_${row}`)) return;
+  STATE.funds-=def.cost;
+  STATE.buildings.set(`${col}_${row}`,{key:PLACEMENT.key,col,row,popAnim:0});
+  addFloat(`${def.emoji} ${def.name}`,col,row,'#ffffff');
+  if (def.income>0) addFloat(`+₪${def.income}/s`,col,row-1,'#ffd166');
+  cancelPlacement();
+  const newM=checkProgression();
+  for (const m of newM) showMilestoneToast(m.label);
+  renderDrawer();
+}
+
+function updateConfirmBar() {
+  if (!PLACEMENT.active) return;
+  const hintEl=document.getElementById('placement-hint');
+  const confirmBtn=document.getElementById('btn-confirm');
+  if (!HOVER) {
+    hintEl.innerHTML='Tap a tile to place';
+    confirmBtn.disabled=true;
+    return;
+  }
+  const h=getPlacementHint(HOVER.col,HOVER.row,PLACEMENT.key);
+  PLACEMENT.valid=h.valid;
+  PLACEMENT.hint=h.hint;
+  const qualColor=h.quality==='great'?'quality-great':h.quality==='good'?'quality-good':h.quality==='bad'?'quality-bad':'';
+  hintEl.innerHTML=`<span class="${qualColor}">${h.hint}</span>`;
+  confirmBtn.disabled=!h.valid;
+}
+
+// Bulldoze mode
+function toggleBulldoze() {
+  if (PLACEMENT.active) cancelPlacement();
+  BULLDOZE_MODE=!BULLDOZE_MODE;
+  document.getElementById('bulldoze-btn').classList.toggle('active',BULLDOZE_MODE);
+  SELECTED_CELL=null;
+  hideInspector();
+  if (BULLDOZE_MODE) closeDrawer();
+}
+function doBulldoze(col,row) {
+  const b=STATE.buildings.get(`${col}_${row}`);
+  if (!b) return;
+  const def=BUILDINGS[b.key];
+  const refund=def?Math.floor(def.cost*0.4):0;
+  STATE.buildings.delete(`${col}_${row}`);
+  if (refund>0) {STATE.funds+=refund; addFloat(`+₪${refund}`,col,row,'#ffd166');}
+  checkProgression();
+  renderDrawer();
+}
+
+// ── INPUT HANDLING ────────────────────────────────────────────────────────
+let pointerDown=false, pointerStart={x:0,y:0}, camStart={x:0,y:0}, dragging=false;
+let lastTouchDist=0;
+
+function getCanvasPos(e) {
+  const r=canvas.getBoundingClientRect();
+  const src=e.touches?e.touches[0]:e;
+  return {x:src.clientX-r.left,y:src.clientY-r.top};
+}
+
+canvas.addEventListener('pointerdown',e=>{
+  e.preventDefault();
+  const p=getCanvasPos(e);
+  pointerDown=true;
+  pointerStart={x:p.x,y:p.y};
+  camStart={x:CAM.x,y:CAM.y};
+  dragging=false;
+});
+
+canvas.addEventListener('pointermove',e=>{
+  e.preventDefault();
+  const p=getCanvasPos(e);
+  const g=screenToGrid(p.x,p.y,CAM,canvas.width,canvas.height);
+  HOVER={col:g.col,row:g.row};
+  if (PLACEMENT.active) updateConfirmBar();
+
+  if (pointerDown) {
+    const dx=p.x-pointerStart.x, dy=p.y-pointerStart.y;
+    if (!dragging&&(Math.abs(dx)>6||Math.abs(dy)>6)) dragging=true;
+    if (dragging) {CAM.x=camStart.x+dx; CAM.y=camStart.y+dy;}
+  }
+});
+
+canvas.addEventListener('pointerup',e=>{
+  e.preventDefault();
+  if (!dragging) {
+    const p=getCanvasPos(e);
+    const g=screenToGrid(p.x,p.y,CAM,canvas.width,canvas.height);
+    handleTap(g.col,g.row);
+  }
+  pointerDown=false; dragging=false;
+});
+
+canvas.addEventListener('touchstart',e=>{
+  if (e.touches.length===2) {
+    const dx=e.touches[0].clientX-e.touches[1].clientX;
+    const dy=e.touches[0].clientY-e.touches[1].clientY;
+    lastTouchDist=Math.sqrt(dx*dx+dy*dy);
+  }
+},{passive:true});
+
+canvas.addEventListener('touchmove',e=>{
+  if (e.touches.length===2) {
+    e.preventDefault();
+    const dx=e.touches[0].clientX-e.touches[1].clientX;
+    const dy=e.touches[0].clientY-e.touches[1].clientY;
+    const dist=Math.sqrt(dx*dx+dy*dy);
+    // pinch zoom
+    lastTouchDist=dist;
+  }
+},{passive:false});
+
+function handleTap(col,row) {
+  if (col<0||col>=STATE.COLS||row<0||row>=STATE.ROWS) return;
+
+  if (PLACEMENT.active) {
+    const h=getPlacementHint(col,row,PLACEMENT.key);
+    if (h.valid) {
+      HOVER={col,row};
+      PLACEMENT.valid=true;
+      confirmPlacement();
+    } else {
+      PLACEMENT.valid=false;
+      updateConfirmBar();
+    }
+    return;
+  }
+
+  if (BULLDOZE_MODE) {
+    if (STATE.buildings.has(`${col}_${row}`)) doBulldoze(col,row);
+    return;
+  }
+
+  // Select / inspect
+  const occupied=STATE.buildings.has(`${col}_${row}`);
+  if (occupied) {
+    if (SELECTED_CELL&&SELECTED_CELL.col===col&&SELECTED_CELL.row===row) {
+      hideInspector();
+    } else {
+      SELECTED_CELL={col,row};
+      showInspector(col,row);
+    }
+  } else {
+    hideInspector();
+    SELECTED_CELL=null;
+  }
+}
+
+// ── BUTTON WIRING ─────────────────────────────────────────────────────────
+document.getElementById('build-fab').addEventListener('click',openDrawer);
+document.getElementById('close-drawer').addEventListener('click',closeDrawer);
+document.getElementById('bulldoze-btn').addEventListener('click',toggleBulldoze);
+document.getElementById('btn-confirm').addEventListener('click',confirmPlacement);
+document.getElementById('btn-cancel').addEventListener('click',cancelPlacement);
+document.getElementById('close-insp').addEventListener('click',hideInspector);
+
+document.getElementById('insp-bulldoze-btn').addEventListener('click',()=>{
+  if (SELECTED_CELL) {
+    doBulldoze(SELECTED_CELL.col,SELECTED_CELL.row);
+    hideInspector();
+  }
+});
+
+document.getElementById('onboard-start').addEventListener('click',()=>{
+  document.getElementById('onboarding').style.display='none';
+});
+
+document.getElementById('settings-btn').addEventListener('click',()=>{
+  renderSettingsMilestones();
+  document.getElementById('settings-modal').classList.add('open');
+});
+document.getElementById('close-settings').addEventListener('click',()=>{
+  document.getElementById('settings-modal').classList.remove('open');
+});
+document.getElementById('reset-btn').addEventListener('click',()=>{
+  if (confirm('Reset your city? This cannot be undone.')) {
+    STATE=createState();
+    FLOAT_TEXTS=[];
+    CAM={x:0,y:0};
+    SELECTED_CELL=null;
+    PLACEMENT={active:false,key:null,valid:false,hint:''};
+    BULLDOZE_MODE=false;
+    hideInspector();
+    cancelPlacement();
+    closeDrawer();
+    document.getElementById('settings-modal').classList.remove('open');
+    prevFunds=800;
+  }
+});
+
+function renderSettingsMilestones() {
+  const el=document.getElementById('settings-milestones');
+  el.innerHTML=MILESTONES.map(m=>`
+    <div class="milestone-item${STATE.completed.has(m.id)?' done':''}">
+      ${m.label} — <span style="font-size:10px">${m.desc}</span>
+    </div>
+  `).join('');
+}
+
+// ── TOASTS ────────────────────────────────────────────────────────────────
+function showMilestoneToast(label) {
+  const t=document.createElement('div');
+  t.className='milestone-toast';
+  t.innerHTML=`🏆 <strong>${label}</strong> unlocked`;
+  document.body.appendChild(t);
+  requestAnimationFrame(()=>{t.classList.add('visible');});
+  setTimeout(()=>{t.classList.remove('visible');setTimeout(()=>t.remove(),400);},3000);
+}
+function showToast(msg,type='pos') {
+  const t=document.createElement('div');
+  t.className='unlock-toast';
+  t.style.color=type==='neg'?'var(--red)':'var(--green)';
+  t.style.borderColor=type==='neg'?'var(--red)':'var(--green)';
+  t.textContent=msg;
+  document.body.appendChild(t);
+  requestAnimationFrame(()=>{t.classList.add('visible');});
+  setTimeout(()=>{t.classList.remove('visible');setTimeout(()=>t.remove(),400);},2500);
+}
+
+// Watch for new unlocks and notify
+let prevUnlockedSize=STATE.unlocked.size;
+function checkForNewUnlocks() {
+  if (STATE.unlocked.size>prevUnlockedSize) {
+    const prevSet=new Set([...STATE.unlocked].slice(0,prevUnlockedSize));
+    for (const key of STATE.unlocked) {
+      if (!prevSet.has(key)) {
+        const def=BUILDINGS[key];
+        if (def) showToast(`🔓 ${def.emoji} ${def.name} unlocked!`,'pos');
+      }
+    }
+    prevUnlockedSize=STATE.unlocked.size;
+    if (drawerOpen) renderDrawer();
+  }
+}
+
+// ── GAME LOOP ─────────────────────────────────────────────────────────────
+let lastTickTime=0;
+function gameTick(ts) {
+  if (ts-lastTickTime>=1000) {
+    lastTickTime=ts;
+    const net=simulateTick();
+    if (Math.abs(net)>0.5 && STATE.buildings.size>0) {
+      // Pick a random building to float income from
+      const bArr=[...STATE.buildings.values()];
+      const b=bArr[Math.floor(Math.random()*bArr.length)];
+      if (net>0) addFloat(`+₪${net.toFixed(1)}`,b.col,b.row,'#06d6a0');
+    }
+    const milestones=checkProgression();
+    for (const m of milestones) showMilestoneToast(m.label);
+    checkForNewUnlocks();
+    updateHUD();
+    if (drawerOpen) renderDrawer();
+  }
+}
+
+// Master rAF loop
+function masterLoop(ts) {
+  gameTick(ts);
+  renderFrame(ts);
+}
+// renderFrame already calls rAF on itself, so:
+function mainLoop(ts) {
+  gameTick(ts);
+  requestAnimationFrame(mainLoop);
+}
+
+// ── INIT ─────────────────────────────────────────────────────────────────
+resizeCanvas();
+window.addEventListener('resize',()=>{resizeCanvas(); if(drawerOpen)renderDrawer();});
+
+// Recalculate HUD height CSS variable after resize
+function updateHUDHeight() {
+  const h=document.getElementById('hud').getBoundingClientRect().height;
+  document.documentElement.style.setProperty('--hud-h',h+'px');
+}
+updateHUDHeight();
+window.addEventListener('resize',updateHUDHeight);
+
+// Initial HUD render
+updateHUD();
+
+// Start render loop
+requestAnimationFrame(renderFrame);
+// Start game loop
+requestAnimationFrame(mainLoop);
+
+// Close drawer/inspector on outside tap
+document.addEventListener('click',e=>{
+  if (drawerOpen&&!e.target.closest('#build-drawer')&&!e.target.closest('#build-fab')) {
+    closeDrawer();
+  }
+});
+</script>
+</body>
+</html>
+
