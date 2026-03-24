@@ -1,0 +1,29 @@
+{
+  "ground": [
+    "assets/iso_tilesets/tile_000.png",
+    "assets/iso_tilesets/tile_001.png",
+    "assets/iso_tilesets/tile_002.png"
+  ],
+  "roads": [
+    "assets/tiles/road_sidewalk_ai_01.jpg",
+    "assets/tiles/road_sidewalk_ai_02.jpg",
+    "assets/tiles/road_tile_ai_01.png",
+    "assets/tiles/road_tile_ai_02.png"
+  ],
+  "buildings": {
+    "bauhaus_block": ["assets/iso_tilesets/tile_012.png"],
+    "hipster_loft": ["assets/iso_tilesets/tile_014.png"],
+    "luxury_tower": ["assets/iso_tilesets/tile_041.png"],
+    "dense_housing": ["assets/iso_tilesets/tile_019.png"],
+    "cafe": ["assets/iso_tilesets/tile_062.png"],
+    "falafel_stand": ["assets/iso_tilesets/tile_023.png"],
+    "bank": ["assets/iso_tilesets/tile_050.png"],
+    "mall": ["assets/iso_tilesets/tile_052.png"],
+    "park": ["assets/iso_tilesets/tile_030.png"],
+    "museum": ["assets/iso_tilesets/tile_075.png"],
+    "police_station": ["assets/iso_tilesets/tile_083.png"],
+    "dizengoff_square": ["assets/iso_tilesets/tile_094.png"],
+    "azrieli_towers": ["assets/iso_tilesets/tile_104.png"],
+    "beach_promenade": ["assets/iso_tilesets/tile_109.png"]
+  }
+}

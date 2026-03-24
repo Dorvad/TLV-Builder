@@ -105,6 +105,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
 }
 #bulldoze-btn.active{background:var(--red);color:#fff;border-color:var(--red)}
 #bulldoze-btn:active{transform:scale(0.92)}
+#bulldoze-btn.hidden{opacity:0;pointer-events:none;transform:translateY(20px)}
 
 /* ── BUILD DRAWER ────────────────────────────────────────────── */
 #build-drawer{
@@ -441,7 +442,7 @@ const BUILDINGS = {
   police_station: {
     key:'police_station', name:'Police', category:'services', emoji:'🚓',
     cost:180, upkeep:3, income:0, pop:0, popType:null, happiness:2, tourism:0,
-    height:44, colors:{top:'#4888d8',last:'#2860b0',right:'#1848880'},
+    height:44, colors:{top:'#4888d8',left:'#2860b0',right:'#184888'},
     desc:'Reduces penalties in dense areas.',
     synergies:['dense_housing','bauhaus_block'], penalties:[],
     resBonus:0, unlocked:false, unlockCond:'buildings_4', unlockDesc:'Place 4 buildings',
@@ -504,7 +505,7 @@ const MILESTONES = [
 function createState() {
   return {
     funds: 800,
-    totalEarned: 800,
+    totalEarned: 0,
     secondsPlayed: 0,
     buildings: new Map(),  // "col_row" → {key,col,row,popAnim}
     stats: {population:0,hipsters:0,highclass:0,locals:0,dense:0,
@@ -730,6 +731,59 @@ let PLACEMENT = {active:false, key:null, valid:false, hint:''};
 let BULLDOZE_MODE = false;
 let FLOAT_TEXTS = [];
 let frameTime = 0;
+const GROUND_TILE_TEXTURE = { img: null, ready: false, tried: false, src: null };
+const BUILDING_TEXTURES = {};
+const FALLBACK_ASSET_MANIFEST = {
+  ground: [
+    'assets/iso_tilesets/tile_000.png',
+    'assets/iso_tilesets/tile_001.png',
+    'assets/iso_tilesets/tile_002.png',
+  ],
+  buildings: {},
+};
+
+function tryLoadFirstTexture(candidates, done, idx=0) {
+  if (!Array.isArray(candidates) || candidates.length===0 || idx>=candidates.length) {
+    done(null, null);
+    return;
+  }
+  const src = candidates[idx];
+  const img = new Image();
+  img.onload = () => done(img, src);
+  img.onerror = () => tryLoadFirstTexture(candidates, done, idx+1);
+  img.src = src;
+}
+
+function loadAssetsFromManifest(manifest) {
+  const groundCandidates = manifest?.ground || FALLBACK_ASSET_MANIFEST.ground;
+  tryLoadFirstTexture(groundCandidates, (img, src) => {
+    GROUND_TILE_TEXTURE.tried = true;
+    if (!img) return;
+    GROUND_TILE_TEXTURE.img = img;
+    GROUND_TILE_TEXTURE.ready = true;
+    GROUND_TILE_TEXTURE.src = src;
+    console.info(`Loaded ground tile texture: ${src}`);
+  });
+
+  const buildingMap = manifest?.buildings || FALLBACK_ASSET_MANIFEST.buildings;
+  for (const key of Object.keys(BUILDINGS)) {
+    tryLoadFirstTexture(buildingMap[key], (img, src) => {
+      if (!img) return;
+      BUILDING_TEXTURES[key] = {img, src};
+      console.info(`Loaded building texture for ${key}: ${src}`);
+    });
+  }
+}
+
+function initAssetManifest() {
+  fetch('assets/asset_manifest.json')
+    .then(r=>r.ok ? r.json() : Promise.reject(new Error(`manifest HTTP ${r.status}`)))
+    .then(loadAssetsFromManifest)
+    .catch(err => {
+      console.warn('Asset manifest load failed, using fallback manifest.', err);
+      loadAssetsFromManifest(FALLBACK_ASSET_MANIFEST);
+    });
+}
 
 function resizeCanvas() {
   const hudH = document.getElementById('hud').getBoundingClientRect().height;
@@ -849,6 +903,27 @@ function drawBuildingDetails(cx,cy,bh,key,popAnim) {
   ctx.restore();
 }
 
+function drawBuildingSprite(cx,cy,b,key,selected=false) {
+  const tex = BUILDING_TEXTURES[key];
+  if (!tex?.img) return false;
+  const img = tex.img;
+  const baseY = cy - (TH*0.35);
+  const scale = Math.max(1, b.popAnim);
+  const h = Math.max(TH+8, b.height + TH*0.9) * scale;
+  const w = Math.max(TW, h*0.75);
+  const y = baseY - h;
+  ctx.save();
+  ctx.globalAlpha = selected ? 0.96 : 0.9;
+  ctx.drawImage(img,cx-w/2,y,w,h);
+  if (selected) {
+    ctx.strokeStyle='#ffd166';
+    ctx.lineWidth=2;
+    ctx.strokeRect(cx-w/2,y,w,h);
+  }
+  ctx.restore();
+  return true;
+}
+
 function renderFrame(ts) {
   frameTime=ts;
   const cw=canvas.width, ch=canvas.height;
@@ -864,9 +939,14 @@ function renderFrame(ts) {
       if (cx<-TW||cx>cw+TW||cy<-TH*6||cy>ch+TH*4) continue;
 
       // Ground tile
-      const g=ctx.createLinearGradient(cx-TW/2,cy-TH/2,cx+TW/2,cy+TH/2);
-      g.addColorStop(0,'#e4d098'); g.addColorStop(1,'#ceba7a');
-      renderTileShape(cx,cy,g,'rgba(0,0,0,0.12)');
+      if (GROUND_TILE_TEXTURE.ready && GROUND_TILE_TEXTURE.img) {
+        ctx.drawImage(GROUND_TILE_TEXTURE.img,cx-TW/2,cy-TH/2,TW,TH);
+        renderTileShape(cx,cy,'rgba(255,255,255,0.01)','rgba(0,0,0,0.08)',1);
+      } else {
+        const g=ctx.createLinearGradient(cx-TW/2,cy-TH/2,cx+TW/2,cy+TH/2);
+        g.addColorStop(0,'#e4d098'); g.addColorStop(1,'#ceba7a');
+        renderTileShape(cx,cy,g,'rgba(0,0,0,0.12)');
+      }
 
       // Highlights
       const isHover=HOVER&&HOVER.col===col&&HOVER.row===row;
@@ -903,8 +983,11 @@ function renderFrame(ts) {
         const bob=isSel?Math.sin(ts/400)*2:0;
         ctx.save();
         if (isBdHover) ctx.globalAlpha=0.5;
-        drawIsoBox(cx,cy-bob,def.height,def.colors,b.popAnim,isSel);
-        drawBuildingDetails(cx,cy-bob,def.height,b.key,b.popAnim);
+        const usedSprite = drawBuildingSprite(cx,cy-bob,b,b.key,isSel);
+        if (!usedSprite) {
+          drawIsoBox(cx,cy-bob,def.height,def.colors,b.popAnim,isSel);
+          drawBuildingDetails(cx,cy-bob,def.height,b.key,b.popAnim);
+        }
         ctx.restore();
       } else if (PLACEMENT.active&&PLACEMENT.key&&HOVER&&HOVER.col===col&&HOVER.row===row&&!occupied) {
         const def=BUILDINGS[PLACEMENT.key];
@@ -994,7 +1077,7 @@ function showInspector(col,row) {
     <div class="insp-stat"><div class="insp-stat-label">Upkeep</div><div class="insp-stat-val">₪${def.upkeep}/s</div></div>
     <div class="insp-stat"><div class="insp-stat-label">Population</div><div class="insp-stat-val">${pop_str}</div></div>
     <div class="insp-stat"><div class="insp-stat-label">Tourism</div><div class="insp-stat-val">${def.tourism>0?'+'+def.tourism:'—'}</div></div>
-    <div class="insp-stat"><div class="insp-stat-label">Happiness</div><div class="insp-stat-val">${def.happiness>=0?'+':''+(def.happiness||'—')}</div></div>
+    <div class="insp-stat"><div class="insp-stat-label">Happiness</div><div class="insp-stat-val">${def.happiness===0?'0':`${def.happiness>0?'+':''}${def.happiness||'—'}`}</div></div>
     <div class="insp-stat"><div class="insp-stat-label">Cost</div><div class="insp-stat-val">₪${def.cost}</div></div>
   `;
 
@@ -1281,6 +1364,7 @@ document.getElementById('reset-btn').addEventListener('click',()=>{
     closeDrawer();
     document.getElementById('settings-modal').classList.remove('open');
     prevFunds=800;
+    prevUnlockedSize=STATE.unlocked.size;
   }
 });
 
@@ -1374,6 +1458,7 @@ window.addEventListener('resize',updateHUDHeight);
 
 // Initial HUD render
 updateHUD();
+initAssetManifest();
 
 // Start render loop
 requestAnimationFrame(renderFrame);
@@ -1389,4 +1474,3 @@ document.addEventListener('click',e=>{
 </script>
 </body>
 </html>
-

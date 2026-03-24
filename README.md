@@ -126,6 +126,15 @@ python3 scripts/organize_assets.py --source ./raw_assets --output ./assets
 Then in `index.html`, replace `renderTileShape()` with image-based tile rendering  
 using the spritesheet from `assets/iso_tilesets/spritesheet.png`.
 
+Current repo now also supports a lightweight runtime manifest:
+
+- `assets/asset_manifest.json` defines candidate texture paths for ground/buildings
+- The game loads from manifest first, then falls back to procedural rendering if files fail
+- You can run quick invariants with:
+  ```bash
+  node scripts/smoke_test.js
+  ```
+
 ---
 
 ## Building Roster
